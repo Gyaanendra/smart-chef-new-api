@@ -9,3 +9,4 @@ python-dotenv
 scikit-learn
 requests
 google-generativeai
+gunicorn
