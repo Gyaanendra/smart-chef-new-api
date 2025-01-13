@@ -1,5 +1,5 @@
-fastapi
-uvicorn
+flask
+flask_cors
 pandas
 numpy
 joblib
@@ -8,3 +8,4 @@ psycopg2
 python-dotenv
 scikit-learn
 gunicorn
+uuid

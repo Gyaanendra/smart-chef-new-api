@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pandas as pd
 import numpy as np
 import joblib
@@ -15,16 +15,8 @@ warnings.filterwarnings("ignore")
 # Load environment variables
 load_dotenv()
 
-app = FastAPI(docs_url=None, redoc_url=None)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = Flask(__name__)
+CORS(app)
 
 # Database connection function
 def get_db_connection():
@@ -36,7 +28,7 @@ def get_db_connection():
         return conn
     except Exception as e:
         print(f"Error connecting to database: {e}")
-        raise HTTPException(status_code=500, detail="Database connection error")
+        return None
 
 # Load models and data
 nlp = spacy.load("en_core_web_sm")
@@ -75,13 +67,12 @@ def recommend_recipes(user_ingredients, user_prep_time, user_cook_time, top_n=10
     return rdf.iloc[sorted_indices].copy()
 
 # API endpoints
-@app.get("/")
-async def d():
-    return "Server is running ",200
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "Server is running"}), 200
 
-
-@app.get("/api/display_recipe")
-async def display_recipe():
+@app.route("/api/display_recipe", methods=["GET"])
+def display_recipe():
     try:
         cleaned_rdf = rdf.fillna('')  # Replace NaN values with empty strings
         recipes = cleaned_rdf[[
@@ -90,106 +81,68 @@ async def display_recipe():
             'Course', 'Diet', 'TranslatedInstructions', 'image_src', 'unique_id'
         ]].to_dict(orient='records')
         
-        return recipes
+        return jsonify(recipes)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return jsonify({"error": str(e)}), 500
 
-     
-     
-db_params = os.getenv('DATABASE_URL')
-
-@app.post("/api/recipeById")
-async def get_recipe_by_id(request: dict):
+@app.route("/api/recipeById", methods=["POST"])
+def get_recipe_by_id():
     try:
-        unique_id = request.get('unique_id')
+        request_data = request.get_json()
+        unique_id = request_data.get('unique_id')
         if not unique_id:
-            return {"error": "unique_id is required"}, 400
+            return jsonify({"error": "unique_id is required"}), 400
 
-        with psycopg2.connect(db_params, cursor_factory=RealDictCursor) as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT * FROM recipes_data WHERE unique_id = %s LIMIT 1
-                """, (unique_id,))
-                recipe = cur.fetchone()
-                
-                if not recipe:
-                    return {"error": "Recipe not found"}, 404
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection error"}), 500
 
-                # Handle None values
-                return {k: ('' if v is None else v) for k, v in recipe.items()}
-                
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT * FROM recipes_data WHERE unique_id = %s LIMIT 1
+            """, (unique_id,))
+            recipe = cur.fetchone()
+            
+            if not recipe:
+                return jsonify({"error": "Recipe not found"}), 404
+
+            return jsonify({k: ('' if v is None else v) for k, v in recipe.items()})
     except Exception as e:
-        return {"error": str(e)}, 500
-            
-            
-            
-@app.post("/api/recommendation")
-async def recommendation(request: dict):
-    # Extract and validate input
-    user_ingredients = request.get('user_ingredients', [])
-    user_prep_time = request.get('user_prep_time', 0)
-    user_cook_time = request.get('user_cook_time', 0)
-    n_recipes = request.get('n_recipes', 20)
+        return jsonify({"error": str(e)}), 500
 
-    # Basic validation
-    if not isinstance(user_ingredients, list) or not user_ingredients:
-        raise HTTPException(status_code=400, detail="user_ingredients must be a non-empty list")
-    
+@app.route("/api/recommendation", methods=["POST"])
+def recommendation():
     try:
+        request_data = request.get_json()
+        user_ingredients = request_data.get('user_ingredients', [])
+        user_prep_time = request_data.get('user_prep_time', 0)
+        user_cook_time = request_data.get('user_cook_time', 0)
+        n_recipes = request_data.get('n_recipes', 20)
+
+        if not isinstance(user_ingredients, list) or not user_ingredients:
+            return jsonify({"error": "user_ingredients must be a non-empty list"}), 400
+        
         user_prep_time = int(user_prep_time)
         user_cook_time = int(user_cook_time)
         n_recipes = int(n_recipes)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Time values must be valid integers")
 
-    if user_prep_time <= 0 or user_cook_time <= 0:
-        raise HTTPException(status_code=400, detail="Time values must be positive")
+        if user_prep_time <= 0 or user_cook_time <= 0:
+            return jsonify({"error": "Time values must be positive"}), 400
 
-    recommendations = recommend_recipes(
-        user_ingredients,
-        user_prep_time,
-        user_cook_time,
-        top_n=n_recipes
-    ).fillna('')  # Replace NaN values in the recommended recipes
+        recommendations = recommend_recipes(
+            user_ingredients,
+            user_prep_time,
+            user_cook_time,
+            top_n=n_recipes
+        ).fillna('')  # Replace NaN values in the recommended recipes
 
-    return recommendations[[
-        'TranslatedRecipeName', 'TranslatedIngredients', 'PrepTimeInMins',
-        'CookTimeInMins', 'TotalTimeInMins', 'Servings', 'Cuisine',
-        'Course', 'Diet', 'TranslatedInstructions', 'image_src', 'unique_id'
-    ]].to_dict(orient='records')
-
-
-# @app.get("/api/options")
-# async def get_options():
-#     try:
-#         conn = get_db_connection()
-#         cur = conn.cursor()
-        
-#         # Get unique diets
-#         cur.execute("SELECT DISTINCT diet FROM recipe_data WHERE diet IS NOT NULL ORDER BY diet")
-#         diets = [None] + [row['diet'] for row in cur.fetchall()]
-        
-#         # Get unique cuisines
-#         cur.execute("SELECT DISTINCT cuisine FROM recipe_data WHERE cuisine IS NOT NULL ORDER BY cuisine")
-#         cuisines = [None] + [row['cuisine'] for row in cur.fetchall()]
-        
-#         # Get unique courses
-#         cur.execute("SELECT DISTINCT course FROM recipe_data WHERE course IS NOT NULL ORDER BY course")
-#         courses = [None] + [row['course'] for row in cur.fetchall()]
-        
-#         cur.close()
-#         conn.close()
-        
-#         return {
-#             "diets": diets,
-#             "cuisines": cuisines,
-#             "courses": courses
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
+        return jsonify(recommendations[[
+            'TranslatedRecipeName', 'TranslatedIngredients', 'PrepTimeInMins',
+            'CookTimeInMins', 'TotalTimeInMins', 'Servings', 'Cuisine',
+            'Course', 'Diet', 'TranslatedInstructions', 'image_src', 'unique_id'
+        ]].to_dict(orient='records'))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "api:app"
-    )
+    app.run(debug=True)
