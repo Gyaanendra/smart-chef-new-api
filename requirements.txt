@@ -1,5 +1,5 @@
-flask
-flask_cors
+Flask
+flask-cors
 pandas
 numpy
 joblib
@@ -7,5 +7,5 @@ spacy
 psycopg2
 python-dotenv
 scikit-learn
-gunicorn
-uuid
+requests
+google-generativeai
