@@ -75,6 +75,11 @@ def recommend_recipes(user_ingredients, user_prep_time, user_cook_time, top_n=10
     return rdf.iloc[sorted_indices].copy()
 
 # API endpoints
+@app.get("/")
+async def d():
+    return "Server is running ", 200
+
+
 @app.get("/api/display_recipe")
 async def display_recipe():
     try:
@@ -185,4 +190,10 @@ async def recommendation(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, port=8000)
+    port = 10000
+    uvicorn.run(
+        "api:app",
+        host="127.0.0.1",
+        port=port,
+        reload=False
+    )
