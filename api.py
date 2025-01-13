@@ -188,12 +188,5 @@ async def recommendation(request: dict):
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    import uvicorn
-    port = 10000
-    uvicorn.run(
-        "api:app",
-        host="127.0.0.1",
-        port=port,
-        reload=False
-    )
+if __name__ == '__main__':
+    app.run(debug=True)

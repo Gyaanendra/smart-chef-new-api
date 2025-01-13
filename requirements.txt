@@ -7,3 +7,4 @@ spacy
 psycopg2
 python-dotenv
 scikit-learn
+gunicorn
