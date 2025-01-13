@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pandas
+numpy
+joblib
+spacy
+psycopg2
+python-dotenv
+scikit-learn
