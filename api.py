@@ -77,7 +77,7 @@ def recommend_recipes(user_ingredients, user_prep_time, user_cook_time, top_n=10
 # API endpoints
 @app.get("/")
 async def d():
-    return "Server is running ", 200
+    return "Server is running ",200
 
 
 @app.get("/api/display_recipe")
@@ -188,5 +188,8 @@ async def recommendation(request: dict):
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "api:app"
+    )
